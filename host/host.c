@@ -17,12 +17,11 @@ typedef struct _PIXEL_t
     uint8_t blue;
 } PIXEL_t;
 
-typedef struct _CommandDrawPanel_t
-{
-    uint8_t panelId;
-    uint8_t bufferId;
-    uint8_t reserved[2];
-    uint8_t pixelMap[64 * 64 * 3];
+typedef struct _CommandDrawPanel_t{
+  uint8_t panelId;
+  uint8_t bufferId;
+  uint8_t reserved[2];
+  uint8_t pixelMap[64 * 64 * 3];
 } CommandDrawPanel_t;
 
 int setInterfaceAttribs (int fd, int speed, int parity)
@@ -30,7 +29,7 @@ int setInterfaceAttribs (int fd, int speed, int parity)
     struct termios tty;
     if (tcgetattr (fd, &tty) != 0)
     {
-        fprintf(stderr, "error %d from tcgetattr", errno);
+        fprintf(stderr, "error %s from tcgetattr", strerror(errno));
         return -1;
     }
 
@@ -71,25 +70,92 @@ void setBlocking(int fd, int should_block)
     memset(&tty, 0, sizeof tty);
     if (tcgetattr(fd, &tty) != 0)
     {
-        fprintf(stderr, "error %d from tggetattr", errno);
+        fprintf(stderr, "error %s from tggetattr", strerror(errno));
         return;
     }
 
     tty.c_cc[VMIN]  = should_block ? 1 : 0;
     tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
 
-    if(tcsetattr(fd, TCSANOW, &tty) != 0) fprintf(stderr, "error %d setting term attributes", errno);
+    if(tcsetattr(fd, TCSANOW, &tty) != 0) fprintf(stderr, "error %s setting term attributes", strerror(errno));
 }
 
-void fillPanel(PIXEL_t panel[64][64], PIXEL_t color)
+void makePanelRed(PIXEL_t panel[64][64])
 {
-    for(int y = 0; y < 64; y++)
+  for(int y = 0; y < 64; y++)
+  {
+    for(int x = 0; x < 64; x++)
     {
-        for(int x = 0; x < 64; x++)
-        {
-            panel[y][x] = color;
-        }
+      panel[y][x].red = 255;
+      panel[y][x].green = 0;
+      panel[y][x].blue = 0;
     }
+  }
+}
+
+void makePanelOrange(PIXEL_t panel[64][64])
+{
+  for(int y = 0; y < 64; y++)
+  {
+    for(int x = 0; x < 64; x++)
+    {
+      panel[y][x].red = 255;
+      panel[y][x].green = 255;
+      panel[y][x].blue = 0;
+    }
+  }
+}
+
+void makePanelGreen(PIXEL_t panel[64][64])
+{
+  for(int y = 0; y < 64; y++)
+  {
+    for(int x = 0; x < 64; x++)
+    {
+      panel[y][x].red = 0;
+      panel[y][x].green = 255;
+      panel[y][x].blue = 0;
+    }
+  }
+}
+
+void makePanelAqua(PIXEL_t panel[64][64])
+{
+  for(int y = 0; y < 64; y++)
+  {
+    for(int x = 0; x < 64; x++)
+    {
+      panel[y][x].red = 0;
+      panel[y][x].green = 255;
+      panel[y][x].blue = 255;
+    }
+  }
+}
+
+void makePanelBlue(PIXEL_t panel[64][64])
+{
+  for(int y = 0; y < 64; y++)
+  {
+    for(int x = 0; x < 64; x++)
+    {
+      panel[y][x].red = 0;
+      panel[y][x].green = 0;
+      panel[y][x].blue = 255;
+    }
+  }
+}
+
+void makePanelViolet(PIXEL_t panel[64][64])
+{
+  for(int y = 0; y < 64; y++)
+  {
+    for(int x = 0; x < 64; x++)
+    {
+      panel[y][x].red = 255;
+      panel[y][x].green = 0;
+      panel[y][x].blue = 255;
+    }
+  }
 }
 
 int main(int argc, char *argv[])
@@ -100,6 +166,7 @@ int main(int argc, char *argv[])
     char *portname = "/dev/ttyACM0";
     int swidth = 64 * 3;
     int sheight = 64 * 2;
+    int serial_size;
 
     int fd = open(portname, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0)
@@ -111,61 +178,47 @@ int main(int argc, char *argv[])
     setInterfaceAttribs(fd, B115200, 1);  // set speed to 115,200 bps, 8n1 (no parity)
     setBlocking(fd, 1);                    // set block on read
 
-    // Test Connection
-    //read(fd, recieve_buffer, sizeof(recieve_buffer));
-    //printf(recieve_buffer);
-    write(fd, "b\n", 2);
-    read(fd, recieve_buffer, sizeof(recieve_buffer));
-    printf(recieve_buffer);
-
     // Setup test Panels
-    fillPanel(display[0], (PIXEL_t){255,   0,   0});
-    fillPanel(display[1], (PIXEL_t){255, 255,   0});
-    fillPanel(display[2], (PIXEL_t){  0, 255,   0});
-    fillPanel(display[3], (PIXEL_t){  0, 255, 255});
-    fillPanel(display[4], (PIXEL_t){  0,   0, 255});
-    fillPanel(display[5], (PIXEL_t){255,   0, 255});
+    makePanelRed(display[0]);
+    makePanelOrange(display[1]);
+    makePanelGreen(display[2]);
+    makePanelAqua(display[3]);
+    makePanelBlue(display[4]);
+    makePanelViolet(display[5]);
 
     // Draw to computer screen
     G_init_graphics(swidth, sheight);
-    for (int n = 0; n < 6; n++)
+    for(int n = 0; n < 6; n++)
     {
-        int x0 = (n % 3) * 64;
-        int y0 = (n / 3) * 64;
-        for (int y = 0; y < 64; y++)
+      int x0 = (n % 3) * 64;
+      int y0 = (n / 3) * 64;
+      for(int y = 0; y < 64; y++)
+      {
+        for(int x = 0; x < 64; x++)
         {
-            for (int x = 0; x < 64; x++)
-            {
-                G_rgb(display[n][y][x].red/255, display[n][y][x].green/255, display[n][y][x].blue/255);
-                G_point(x0+x, y0+y);
-            }
+          G_rgb(display[n][y][x].red/255, display[n][y][x].green/255, display[n][y][x].blue/255);
+          G_point(x0+x, y0+y);
         }
+      }
     }
 
     CommandDrawPanel_t packet;
-    for (int i = 0; i < 6; i++)
+    for(int i = 0; i < 6; i++)
     {
-        packet.panelId = i+1;
-        memcpy(packet.pixelMap, display[i], sizeof(display[i]));
-        write(fd, &packet, sizeof(packet));
-        sleep(0.5);
-        write(fd, "\n", 1);
-        read(fd, recieve_buffer, sizeof(recieve_buffer));
-        printf(recieve_buffer);
+      packet.panelId = i+1;
+      memcpy(packet.pixelMap, display[i], sizeof(display[i]));
+      serial_size = write(fd, &packet, sizeof(packet));
+      //printf("Sending packet: %d\n", serial_size);
+      serial_size = write(fd, "\n", 1);
+      serial_size = read(fd, recieve_buffer, sizeof(recieve_buffer));
+      printf(recieve_buffer);
+      sleep(1);
     }
     write(fd, "d\n", 2);
     read(fd, recieve_buffer, sizeof(recieve_buffer));
     printf(recieve_buffer);
 
     G_wait_key();
-    /*while(1)
-    {
-        const char c[2] = {255, '\n'};
-        memset(recieve_buffer, '\0', sizeof(recieve_buffer));
-        write(fd, c, 2);
-        read(fd, recieve_buffer, sizeof(recieve_buffer));
-        printf(recieve_buffer);
-    }*/
 
     return 0;
 }
