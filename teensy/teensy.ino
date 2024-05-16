@@ -13,6 +13,7 @@ void checkSerial();
  * Globals
 ******************************************************************************/
 SMARTMATRIX_ALLOCATE_BUFFERS(matrix, kMatrixWidth, kMatrixHeight, kRefreshDepth, kDmaBufferRows, SM_PANELTYPE_HUB75_64ROW_MOD32SCAN, SM_HUB75_OPTIONS_NONE);
+//SMARTMATRIX_ALLOCATE_BUFFERS(matrix, kMatrixWidth, kMatrixHeight, kRefreshDepth, kDmaBufferRows, SM_PANELTYPE_HUB75_64ROW_MOD32SCAN, SM_HUB75_OPTIONS_FM6126A_RESET_AT_START);
 SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(drawingLayer, kMatrixWidth, kMatrixHeight, COLOR_DEPTH, SM_BACKGROUND_OPTIONS_NONE);
 String g_inputString = "";      // a String to hold incoming data
 bool g_stringComplete = false;  // whether the string is complete
@@ -24,7 +25,7 @@ void setup()
 {
   matrix.addLayer(&drawingLayer);
   matrix.begin();
-  matrix.setBrightness(0x60);
+  matrix.setBrightness(0x40);
 
   drawingLayer.fillScreen({0x00, 0x00, 0x00});
   drawingLayer.swapBuffers();
@@ -61,10 +62,10 @@ void processCommand()
       break;
     }
     case 'c':
-     Serial.println("Clearing Panels");
-     drawingLayer.fillScreen({0x00, 0x00, 0x00});
-     drawingLayer.swapBuffers();
-     break;
+      Serial.println("Clearing Panels");
+      drawingLayer.fillScreen({0x00, 0x00, 0x00});
+      drawingLayer.swapBuffers();
+      break;
     case 'd':
       Serial.println("Moving to display memory");
       drawingLayer.swapBuffers();
@@ -114,7 +115,7 @@ void serialEvent()
   // Wait until we process the last serial string
   if(g_stringComplete) return;
 
-  while (Serial.available()) {
+  while (Serial.available() > 0) {
     // get the new byte:
     char inChar = (char)Serial.read();
 
@@ -157,9 +158,9 @@ void updatePanel(CommandDrawPanel_t *const packet)
   {
     for(int x = 0; x < PANEL_SIZE; x++)
     {
-      color.red   = packet->pixelMap[3*y * PANEL_SIZE + 3*x + 0];
-      color.green = packet->pixelMap[3*y * PANEL_SIZE + 3*x + 1];
-      color.blue  = packet->pixelMap[3*y * PANEL_SIZE + 3*x + 2];
+      color.red   = packet->pixelMap[COLORS*y * PANEL_SIZE + COLORS*x + 0];
+      color.green = packet->pixelMap[COLORS*y * PANEL_SIZE + COLORS*x + 1];
+      color.blue  = packet->pixelMap[COLORS*y * PANEL_SIZE + COLORS*x + 2];
       drawingLayer.drawPixel(x0 + x, y0 + y, color);
     }
   }

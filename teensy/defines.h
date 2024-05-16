@@ -4,6 +4,7 @@
 /******************************************************************************
  * Defines
 ******************************************************************************/
+#define COLORS 3 // RGB
 #define COLOR_DEPTH 24
 #define PANEL_SIZE 64
 #define PANEL_AREA PANEL_SIZE * PANEL_SIZE

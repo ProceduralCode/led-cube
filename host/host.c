@@ -9,6 +9,8 @@
 #include <termios.h>
 #include <unistd.h>
 #include "FPToolkit.c"
+#include "defines.h"
+#include "packet.h"
 
 typedef struct _PIXEL_t
 {
@@ -16,13 +18,6 @@ typedef struct _PIXEL_t
     uint8_t green;
     uint8_t blue;
 } PIXEL_t;
-
-typedef struct _CommandDrawPanel_t{
-  uint8_t panelId;
-  uint8_t bufferId;
-  uint8_t reserved[2];
-  uint8_t pixelMap[64 * 64 * 3];
-} CommandDrawPanel_t;
 
 int setInterfaceAttribs (int fd, int speed, int parity)
 {
@@ -43,8 +38,8 @@ int setInterfaceAttribs (int fd, int speed, int parity)
     tty.c_lflag = 0;                // no signaling chars, no echo,
                                     // no canonical processing
     tty.c_oflag = 0;                // no remapping, no delays
-    tty.c_cc[VMIN]  = 0;            // read doesn't block
-    tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
+    tty.c_cc[VMIN]  = 1;            // read() waits until at least a character is read
+    tty.c_cc[VTIME] = 0;            // no timeout
 
     tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
 
@@ -64,110 +59,31 @@ int setInterfaceAttribs (int fd, int speed, int parity)
     return 0;
 }
 
-void setBlocking(int fd, int should_block)
+void fillPanel(PIXEL_t panel[PANEL_SIZE][PANEL_SIZE], PIXEL_t color)
 {
-    struct termios tty;
-    memset(&tty, 0, sizeof tty);
-    if (tcgetattr(fd, &tty) != 0)
-    {
-        fprintf(stderr, "error %s from tggetattr", strerror(errno));
-        return;
-    }
-
-    tty.c_cc[VMIN]  = should_block ? 1 : 0;
-    tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
-
-    if(tcsetattr(fd, TCSANOW, &tty) != 0) fprintf(stderr, "error %s setting term attributes", strerror(errno));
-}
-
-void makePanelRed(PIXEL_t panel[64][64])
-{
-  for(int y = 0; y < 64; y++)
+  for(int y = 0; y < PANEL_SIZE; y++)
   {
-    for(int x = 0; x < 64; x++)
+    for(int x = 0; x < PANEL_SIZE; x++)
     {
-      panel[y][x].red = 255;
-      panel[y][x].green = 0;
-      panel[y][x].blue = 0;
-    }
-  }
-}
-
-void makePanelOrange(PIXEL_t panel[64][64])
-{
-  for(int y = 0; y < 64; y++)
-  {
-    for(int x = 0; x < 64; x++)
-    {
-      panel[y][x].red = 255;
-      panel[y][x].green = 255;
-      panel[y][x].blue = 0;
-    }
-  }
-}
-
-void makePanelGreen(PIXEL_t panel[64][64])
-{
-  for(int y = 0; y < 64; y++)
-  {
-    for(int x = 0; x < 64; x++)
-    {
-      panel[y][x].red = 0;
-      panel[y][x].green = 255;
-      panel[y][x].blue = 0;
-    }
-  }
-}
-
-void makePanelAqua(PIXEL_t panel[64][64])
-{
-  for(int y = 0; y < 64; y++)
-  {
-    for(int x = 0; x < 64; x++)
-    {
-      panel[y][x].red = 0;
-      panel[y][x].green = 255;
-      panel[y][x].blue = 255;
-    }
-  }
-}
-
-void makePanelBlue(PIXEL_t panel[64][64])
-{
-  for(int y = 0; y < 64; y++)
-  {
-    for(int x = 0; x < 64; x++)
-    {
-      panel[y][x].red = 0;
-      panel[y][x].green = 0;
-      panel[y][x].blue = 255;
-    }
-  }
-}
-
-void makePanelViolet(PIXEL_t panel[64][64])
-{
-  for(int y = 0; y < 64; y++)
-  {
-    for(int x = 0; x < 64; x++)
-    {
-      panel[y][x].red = 255;
-      panel[y][x].green = 0;
-      panel[y][x].blue = 255;
+      panel[y][x] = color;
     }
   }
 }
 
 int main(int argc, char *argv[])
 {
-    PIXEL_t display[6][64][64];
+    PIXEL_t display[PANELS][PANEL_SIZE][PANEL_SIZE];
     char recieve_buffer[1024];
     //char *portname = "/dev/ttyUSB1";
     char *portname = "/dev/ttyACM0";
-    int swidth = 64 * 3;
-    int sheight = 64 * 2;
+    int swidth = PANEL_SIZE * PANELS_HORIZONTAL;
+    int sheight = PANEL_SIZE * PANELS_VERTICAL;
     int serial_size;
 
+    // Open the connection to the USB device (teensy)
+    // The file descriptor, fd will be very important to identify
+    // this unique serial port from any other we may open.
+    // fd is likely to be 3 since 0 = stdin, 1 = stdout, and 2 = stderr
     int fd = open(portname, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0)
     {
@@ -176,25 +92,24 @@ int main(int argc, char *argv[])
     }
 
     setInterfaceAttribs(fd, B115200, 1);  // set speed to 115,200 bps, 8n1 (no parity)
-    setBlocking(fd, 1);                    // set block on read
 
     // Setup test Panels
-    makePanelRed(display[0]);
-    makePanelOrange(display[1]);
-    makePanelGreen(display[2]);
-    makePanelAqua(display[3]);
-    makePanelBlue(display[4]);
-    makePanelViolet(display[5]);
+    fillPanel(display[0], (PIXEL_t){255,   0,   0});
+    fillPanel(display[1], (PIXEL_t){255, 255,   0});
+    fillPanel(display[2], (PIXEL_t){  0, 255,   0});
+    fillPanel(display[3], (PIXEL_t){  0, 255, 255});
+    fillPanel(display[4], (PIXEL_t){  0,   0, 255});
+    fillPanel(display[5], (PIXEL_t){255,   0, 255});
 
     // Draw to computer screen
     G_init_graphics(swidth, sheight);
-    for(int n = 0; n < 6; n++)
+    for(int n = 0; n < PANELS; n++)
     {
-      int x0 = (n % 3) * 64;
-      int y0 = (n / 3) * 64;
-      for(int y = 0; y < 64; y++)
+      int x0 = (n % COLORS) * PANEL_SIZE;
+      int y0 = (n / COLORS) * PANEL_SIZE;
+      for(int y = 0; y < PANEL_SIZE; y++)
       {
-        for(int x = 0; x < 64; x++)
+        for(int x = 0; x < PANEL_SIZE; x++)
         {
           G_rgb(display[n][y][x].red/255, display[n][y][x].green/255, display[n][y][x].blue/255);
           G_point(x0+x, y0+y);
@@ -202,23 +117,27 @@ int main(int argc, char *argv[])
       }
     }
 
+    // Send pixel map(s) to the teensy
     CommandDrawPanel_t packet;
-    for(int i = 0; i < 6; i++)
+    for(int i = 0; i < PANELS; i++)
     {
       packet.panelId = i+1;
       memcpy(packet.pixelMap, display[i], sizeof(display[i]));
       serial_size = write(fd, &packet, sizeof(packet));
-      //printf("Sending packet: %d\n", serial_size);
       serial_size = write(fd, "\n", 1);
       serial_size = read(fd, recieve_buffer, sizeof(recieve_buffer));
       printf(recieve_buffer);
-      sleep(1);
     }
+    // Send command to update the panels
     write(fd, "d\n", 2);
     read(fd, recieve_buffer, sizeof(recieve_buffer));
     printf(recieve_buffer);
 
     G_wait_key();
+
+    write(fd, "c\n", 2);
+    read(fd, recieve_buffer, sizeof(recieve_buffer));
+    printf(recieve_buffer);
 
     return 0;
 }
