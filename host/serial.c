@@ -26,7 +26,7 @@ static char portname[] = "ttyACM"; //"ttyUSB1";
  * serialInit() will eit the program if it is unable to open any USB serial
  * ports
  *****************************************************************************/
-void serialInit()
+int serialInit()
 {
     char port[32] = {0};
     struct dirent **serial_devices = NULL;
@@ -74,6 +74,8 @@ void serialInit()
         free(serial_devices[i]);
     }
     free(serial_devices);
+
+    return total_fd;
 }
 
 int serialFilter(const struct dirent *entry)
@@ -138,4 +140,18 @@ void serialRead(const int id)
     }
     printf("\n");
     fflush(stdout);
+}
+
+void serialGetID(const int id)
+{
+    int i = 0;
+
+    write(fd[id], "i\n", 2);
+    read(fd[id], recieve_buffer, sizeof(recieve_buffer));
+    printf("0x");
+    while(recieve_buffer[i] != '\n')
+    {
+        printf("%02X", recieve_buffer[i++]);
+    }
+    printf("\n");
 }

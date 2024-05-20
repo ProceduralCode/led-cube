@@ -32,7 +32,9 @@ int main(int argc, char *argv[])
     int swidth = PANEL_SIZE * PANELS_HORIZONTAL;
     int sheight = PANEL_SIZE * PANELS_VERTICAL;
 
-    serialInit();
+    int devices = serialInit();
+
+    //for(int i = 0; i < devices; i++) serialGetID(i);
 
     // Setup test Panels
     fillPanel(display[0], (PIXEL_t){255,   0,   0});
@@ -60,21 +62,31 @@ int main(int argc, char *argv[])
 
     // Send pixel map(s) to the teensy
     CommandDrawPanel_t packet;
-    for(int i = 0; i < PANELS; i++)
+    int section = PANELS/devices;
+    for(int j = 0; j < devices; j++)
     {
-      packet.panelId = i+1;
-      memcpy(packet.pixelMap, display[i], sizeof(display[i]));
-      serialWrite(0, (char*)&packet, sizeof(packet));
-      serialRead(0);
+        for(int i = 0; i < section; i++)
+        {
+          packet.panelId = i+1;
+          memcpy(packet.pixelMap, display[i+j*section], sizeof(display[i]));
+          serialWrite(j, (char*)&packet, sizeof(packet));
+          serialRead(j);
+        }
     }
     // Send command to update the panels
-    serialWrite(0, "d", 1);
-    serialRead(0);
+    for(int j = 0; j < devices; j++)
+    {
+        serialWrite(j, "d", 1);
+        serialRead(j);
+    }
 
     G_wait_key();
 
-    serialWrite(0, "c", 1);
-    serialRead(0);
+    for(int j = 0; j < devices; j++)
+    {
+        serialWrite(j, "c", 1);
+        serialRead(j);
+    }
 
     return 0;
 }

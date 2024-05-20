@@ -12,8 +12,7 @@ void checkSerial();
 /******************************************************************************
  * Globals
 ******************************************************************************/
-SMARTMATRIX_ALLOCATE_BUFFERS(matrix, kMatrixWidth, kMatrixHeight, kRefreshDepth, kDmaBufferRows, SM_PANELTYPE_HUB75_64ROW_MOD32SCAN, SM_HUB75_OPTIONS_NONE);
-//SMARTMATRIX_ALLOCATE_BUFFERS(matrix, kMatrixWidth, kMatrixHeight, kRefreshDepth, kDmaBufferRows, SM_PANELTYPE_HUB75_64ROW_MOD32SCAN, SM_HUB75_OPTIONS_FM6126A_RESET_AT_START);
+SMARTMATRIX_ALLOCATE_BUFFERS(matrix, kMatrixWidth, kMatrixHeight, kRefreshDepth, kDmaBufferRows, SM_PANELTYPE_HUB75_64ROW_MOD32SCAN, SM_HUB75_OPTIONS_FM6126A_RESET_AT_START);
 SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(drawingLayer, kMatrixWidth, kMatrixHeight, COLOR_DEPTH, SM_BACKGROUND_OPTIONS_NONE);
 String g_inputString = "";      // a String to hold incoming data
 bool g_stringComplete = false;  // whether the string is complete
@@ -25,7 +24,7 @@ void setup()
 {
   matrix.addLayer(&drawingLayer);
   matrix.begin();
-  matrix.setBrightness(0x40);
+  matrix.setBrightness(0x20);
 
   drawingLayer.fillScreen({0x00, 0x00, 0x00});
   drawingLayer.swapBuffers();
@@ -45,6 +44,21 @@ void loop()
 
 void processCommand()
 {
+  static bool id_flag;
+  int len;
+  uint8_t *send_buffer;
+
+  if(g_command && id_flag)
+  {
+    *((uint64_t *)g_buffer) = HW_OCOTP_CFG0 | HW_OCOTP_CFG1 << 32;
+    len = 8;
+    send_buffer = g_buffer + len;
+  }
+  else {
+    len = 0;
+    send_buffer = g_buffer;
+  }
+
   switch(g_command)
   {
     case 0: // This is an empty command. No processing.
@@ -57,56 +71,95 @@ void processCommand()
     case 6:
     {
       CommandDrawPanel_t *packet = (CommandDrawPanel_t *)g_buffer;
-      Serial.printf("Updating Panel %d %d\n", packet->panelId, packet->bufferId);
       updatePanel(packet);
+      sprintf(send_buffer, "Updating Panel %d %d\n", packet->panelId, packet->bufferId);
+      len = len + strlen(send_buffer);
       break;
     }
     case 'c':
-      Serial.println("Clearing Panels");
       drawingLayer.fillScreen({0x00, 0x00, 0x00});
       drawingLayer.swapBuffers();
+      sprintf(send_buffer, "Clearing Panels\n");
+      len = len + strlen(send_buffer);
       break;
     case 'd':
-      Serial.println("Moving to display memory");
       drawingLayer.swapBuffers();
+      sprintf(send_buffer, "Moving to display memory\n");
+      len = len + strlen(send_buffer);
       break;
     case 'f':
-      Serial.printf("FPS: %d\n", matrix.getRefreshRate());
+      sprintf(send_buffer, "FPS: %d\n", matrix.getRefreshRate());
+      len = len + strlen(send_buffer);
       break;
     case 'r':
       drawingLayer.fillScreen({0xff, 0x00, 0x00});
       drawingLayer.swapBuffers();
-      Serial.println("Make Red");
+      sprintf(send_buffer, "Make Red\n");
+      len = len + strlen(send_buffer);
       break;
     case 'g':
       drawingLayer.fillScreen({0x00, 0xff, 0x00});
       drawingLayer.swapBuffers();
-      Serial.println("Make Green");
+      sprintf(send_buffer, "Make Green\n");
+      len = len + strlen(send_buffer);
       break;
     case 'b':
       drawingLayer.fillScreen({0x00, 0x00, 0xff});
       drawingLayer.swapBuffers();
-      Serial.println("Make Blue");
+      sprintf(send_buffer, "Make Blue\n");
+      len = len + strlen(send_buffer);
       break;
     case 'w':
       drawingLayer.fillScreen({0xff, 0xff, 0xff});
       drawingLayer.swapBuffers();
-      Serial.println("Make White");
+      sprintf(send_buffer, "Make White\n");
+      len = len + strlen(send_buffer);
       break;
     case 't':
 #ifdef LED_ENABLED
-      Serial.println("Blinking");
+      sprintf(send_buffer, "Blinking\n");
+      len = len + strlen(send_buffer);
       blink();
 #else
       {
-      rgb24 color(drawingLayer.readPixel(63, 63));
-      Serial.printf("0x%02x%02x%02x\n", color.red, color.green, color.blue);
+      id_flag = !id_flag;
+      sprintf(send_buffer, "Toggling ID: 0x%X%X\n", HW_OCOTP_CFG0, HW_OCOTP_CFG1);
+      len = len + strlen(send_buffer);
       }
 #endif
       break;
+    case 'i':
+      send_buffer[0] = 0x000000FF & HW_OCOTP_CFG0 <<  0;
+      send_buffer[1] = 0x0000FF00 & HW_OCOTP_CFG0 <<  8;
+      send_buffer[2] = 0x00FF0000 & HW_OCOTP_CFG0 << 16;
+      send_buffer[3] = 0xFF000000 & HW_OCOTP_CFG0 << 24;
+      send_buffer[4] = 0x000000FF & HW_OCOTP_CFG1 <<  0;
+      send_buffer[5] = 0x0000FF00 & HW_OCOTP_CFG1 <<  8;
+      send_buffer[6] = 0x00FF0000 & HW_OCOTP_CFG1 << 16;
+      send_buffer[7] = 0xFF000000 & HW_OCOTP_CFG1 << 24;
+      send_buffer[8] = '\n';
+      len = len + 9;
+      break;
+    case 'p':
+    {
+      CommandGetPixel_t *packet = (CommandGetPixel_t *)g_buffer;
+      rgb24 pixel = drawingLayer.readPixel(packet->x, packet->y);
+      send_buffer[0] = pixel.red;
+      send_buffer[1] = pixel.green;
+      send_buffer[2] = pixel.blue;
+      send_buffer[3] = '\n';
+      len = len + 4;
+      break;
+    }
     default:
-      Serial.printf("Unknown command 0x%X with size %d\n", g_command, g_commandLength);
+      sprintf(send_buffer, "Unknown command 0x%X with size %d\n", g_command, g_commandLength);
+      len = len + strlen(g_buffer);
   }
+
+  // Check if there's a response to send
+  if(len > 0) Serial.write(g_buffer, len);
+
+  // Clear the command flag for the next incoming packet
   g_command = 0;
 }
 
