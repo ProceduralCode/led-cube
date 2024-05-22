@@ -22,7 +22,7 @@ static char recieve_buffer[4096];
 
 // Constants to find the USB serial ports
 static char basedir[] = "/dev/";
-static char portname[] = "ttyACM"; //"ttyUSB1";
+static char portname[] = "ttyACM";
 
 /******************************************************************************
  * serialInit() will eit the program if it is unable to open any USB serial
@@ -69,7 +69,7 @@ int serialInit()
         }
 
         printf("Setting fd%d:%s\n", fd[i], port);
-        setInterfaceAttribs(fd[i], B115200, 1);  // set speed to 115,200 bps, 8n1 (no parity)
+        setInterfaceAttribs(fd[i], B1000000, 1);  // set speed to 115,200 bps, 8n1 (no parity)
         memset(port, '\0', strlen(port));
     }
 

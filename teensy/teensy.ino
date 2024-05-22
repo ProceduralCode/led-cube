@@ -33,7 +33,7 @@ void setup()
 #ifdef LED_ENABLED
   pinMode(LED_PIN, OUTPUT);
 #endif
-  Serial.begin(115200);
+  Serial.begin(1000000);
   g_inputString.reserve(INPUT_RESERVE);
 }
 
@@ -148,7 +148,11 @@ void processCommand()
   }
 
   // Check if there's a response to send
-  if(len > 0) Serial.write(g_SendBuffer, len);
+  if(len > 0)
+  {
+    Serial.write(g_SendBuffer, len);
+    Serial.send_now();
+  }
 
   // Clear the command flag for the next incoming packet
   g_command = 0;
@@ -178,6 +182,7 @@ void serialEvent()
 
 void checkSerial()
 {
+  // Block if we are processing a command already
   if(g_command != 0) return;
 
   if(g_stringComplete)

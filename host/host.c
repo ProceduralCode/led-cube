@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
     CommandDrawPanel_t packet;
     int section = PANELS/devices;
     //struct timespec before, after;
-    int k = 60;
+    int k = 1000;
     while(k)
     {
         //clock_gettime(CLOCK_REALTIME, &before);
@@ -73,11 +73,10 @@ int main(int argc, char *argv[])
                 int shuffle = (i+k) % section;
                 packet.panelId = i+1;
                 packet.bufferId = 0;
-                packet.flags = 0;
+                packet.flags = 1;
                 memcpy(packet.pixelMap, display[shuffle+j*section], sizeof(display[shuffle]));
                 serialWrite(j, (char*)&packet, sizeof(packet));
-                if(packet.flags) serialRead(j, 1);
-                else usleep(20000);
+                if(packet.flags) serialRead(j, 0);
             }
         }
         // Send command to update the panels
