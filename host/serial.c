@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <termios.h>
 #include <unistd.h>
 #include <errno.h>
@@ -14,9 +15,10 @@ int setInterfaceAttribs(const int fd, const int speed, const int parity);
 // I don't expect there to be more than 4 teensy devices
 static int fd[4];
 static int total_fd;
+static fd_set g_writefds, g_readfds;
 
 // Buffer to make serialRead self contained
-static char recieve_buffer[1024];
+static char recieve_buffer[4096];
 
 // Constants to find the USB serial ports
 static char basedir[] = "/dev/";
@@ -48,6 +50,8 @@ int serialInit()
     }
 
     total_fd = numUSB;
+    FD_ZERO(&g_writefds);
+    FD_ZERO(&g_readfds);
 
     for(int i = 0; i < total_fd; i++)
     {
@@ -69,13 +73,35 @@ int serialInit()
         memset(port, '\0', strlen(port));
     }
 
+    for(int i = 0; i < total_fd-1; i++)
+    {
+        uint64_t id_1 = serialGetID(i);
+        uint64_t id_2 = serialGetID(i+1);
+        if(id_1 > id_2)
+        {
+            int temp = fd[i];
+            fd[i] = fd[i+1];
+            fd[i+1] = temp;
+        }
+    }
+
     for(int i = 0; i < numUSB; i++)
     {
         free(serial_devices[i]);
+        //uint64_t id_1 = serialGetID(i);
+        //printf("fd%d: 0x%llX\n", fd[i], id_1);
     }
     free(serial_devices);
 
     return total_fd;
+}
+
+void serialDeinit()
+{
+    for(int i = 0; i < total_fd-1; i++)
+    {
+        close(fd[i]);
+    }
 }
 
 int serialFilter(const struct dirent *entry)
@@ -125,33 +151,93 @@ int setInterfaceAttribs(const int fd, const int speed, const int parity)
 
 void serialWrite(const int id, const char buffer[], const int size)
 {
-    write(fd[id], buffer, size);
-    write(fd[id], "\n", 1);
+    int count;
+    int fds;
+    int is_ready;
+
+    // Let's use a select call to enxure that the serial port is ready
+    do {
+        FD_SET(fd[id], &g_writefds);
+        fds = select(fd[id]+1, NULL, &g_writefds, NULL, NULL);
+        if(fds == -1) fprintf(stderr, "error %d selecting device%d: %s\n", errno, id, strerror(errno));
+        is_ready = FD_ISSET(fd[id], &g_writefds);
+    } while(!is_ready);
+    count = write(fd[id], buffer, size);
+    if(count == -1)
+    {
+        fprintf(stderr, "error %d writing to port[%d]: %s\n", errno, id, strerror(errno));
+        exit(0);
+    }
+    // Let's use a select call to enxure that the serial port is ready
+    do {
+        FD_SET(fd[id], &g_writefds);
+        fds = select(fd[id]+1, NULL, &g_writefds, NULL, NULL);
+        if(fds == -1) fprintf(stderr, "error %d selecting device%d: %s\n", errno, id, strerror(errno));
+        is_ready = FD_ISSET(fd[id], &g_writefds);
+    } while(!is_ready);
+    count = write(fd[id], "\n", 1);
+    if(count == -1)
+    {
+        fprintf(stderr, "error %d writing to port%d: %s\n", errno, id, strerror(errno));
+        exit(0);
+    }
 }
 
-void serialRead(const int id)
+void serialRead(const int id, const int print)
 {
-    int size = read(fd[id], recieve_buffer, sizeof(recieve_buffer));
-    int i = 0;
-    while(recieve_buffer[i] != '\n' && i < size)
+    int count;
+    int fds;
+    int is_ready;
+
+    // Let's use a select call to enxure that the serial port is ready
+    do {
+        FD_SET(fd[id], &g_readfds);
+        fds = select(fd[id]+1, &g_readfds, NULL, NULL, NULL);
+        if(fds == -1) fprintf(stderr, "error %d selecting device%d: %s\n", errno, id, strerror(errno));
+        is_ready = FD_ISSET(fd[id], &g_readfds);
+    } while(!is_ready);
+    count = read(fd[id], recieve_buffer, sizeof(recieve_buffer));
+    if(count > -1)
     {
-        printf("%c", recieve_buffer[i]);
-        i++;
+        int i = 0;
+        while(recieve_buffer[i] != '\n' && i < count)
+        {
+            if(print) printf("%c", recieve_buffer[i]);
+            i++;
+        }
+        if(print) printf("\n");
     }
-    printf("\n");
+    else
+    {
+        fprintf(stderr, "error %d reading port[%d]: %s\n", errno, id, strerror(errno));
+        exit(0);
+    }
+    //fsync(fd[id]);
     fflush(stdout);
 }
 
-void serialGetID(const int id)
+uint64_t serialGetID(const int id)
 {
-    int i = 0;
+    int count;
+    int fds;
+    int is_ready;
+    uint64_t device_id;
 
-    write(fd[id], "i\n", 2);
-    read(fd[id], recieve_buffer, sizeof(recieve_buffer));
-    printf("0x");
-    while(recieve_buffer[i] != '\n')
-    {
-        printf("%02X", recieve_buffer[i++]);
-    }
-    printf("\n");
+    do {
+        FD_SET(fd[id], &g_writefds);
+        fds = select(fd[id]+1, NULL, &g_writefds, NULL, NULL);
+        if(fds == -1) fprintf(stderr, "error %d selecting device%d: %s\n", errno, id, strerror(errno));
+        is_ready = FD_ISSET(fd[id], &g_writefds);
+    } while(!is_ready);
+    count = write(fd[id], "i\n", 2);
+    do {
+        FD_SET(fd[id], &g_readfds);
+        fds = select(fd[id]+1, &g_readfds, NULL, NULL, NULL);
+        if(fds == -1) fprintf(stderr, "error %d selecting device%d: %s\n", errno, id, strerror(errno));
+        is_ready = FD_ISSET(fd[id], &g_readfds);
+    } while(!is_ready);
+    count = read(fd[id], recieve_buffer, sizeof(recieve_buffer));
+    device_id = *((uint64_t*)recieve_buffer);
+
+    return device_id;
 }

@@ -34,8 +34,6 @@ int main(int argc, char *argv[])
 
     int devices = serialInit();
 
-    //for(int i = 0; i < devices; i++) serialGetID(i);
-
     // Setup test Panels
     fillPanel(display[0], (PIXEL_t){255,   0,   0});
     fillPanel(display[1], (PIXEL_t){255, 255,   0});
@@ -43,7 +41,7 @@ int main(int argc, char *argv[])
     fillPanel(display[3], (PIXEL_t){  0, 255, 255});
     fillPanel(display[4], (PIXEL_t){  0,   0, 255});
     fillPanel(display[5], (PIXEL_t){255,   0, 255});
-
+/*
     // Draw to computer screen
     G_init_graphics(swidth, sheight);
     for(int n = 0; n < PANELS; n++)
@@ -54,39 +52,54 @@ int main(int argc, char *argv[])
       {
         for(int x = 0; x < PANEL_SIZE; x++)
         {
-          G_rgb(display[n][y][x].red/255, display[n][y][x].green/255, display[n][y][x].blue/255);
+          G_rgb(display[n][y][x].red/255.0, display[n][y][x].green/255.0, display[n][y][x].blue/255.0);
           G_point(x0+x, y0+y);
         }
       }
     }
-
+*/
     // Send pixel map(s) to the teensy
     CommandDrawPanel_t packet;
     int section = PANELS/devices;
-    for(int j = 0; j < devices; j++)
+    //struct timespec before, after;
+    int k = 60;
+    while(k)
     {
-        for(int i = 0; i < section; i++)
+        //clock_gettime(CLOCK_REALTIME, &before);
+        for(int j = 0; j < devices; j++)
         {
-          packet.panelId = i+1;
-          memcpy(packet.pixelMap, display[i+j*section], sizeof(display[i]));
-          serialWrite(j, (char*)&packet, sizeof(packet));
-          serialRead(j);
+            for(int i = 0; i < section; i++)
+            {
+                int shuffle = (i+k) % section;
+                packet.panelId = i+1;
+                packet.bufferId = 0;
+                packet.flags = 0;
+                memcpy(packet.pixelMap, display[shuffle+j*section], sizeof(display[shuffle]));
+                serialWrite(j, (char*)&packet, sizeof(packet));
+                if(packet.flags) serialRead(j, 1);
+                else usleep(20000);
+            }
         }
+        // Send command to update the panels
+        for(int j = 0; j < devices; j++)
+        {
+            serialWrite(j, "d", 1);
+            serialRead(j, 0);
+        }
+        k--;
+        //clock_gettime(CLOCK_REALTIME, &after);
+        //printf("%ums\n", (after.tv_nsec-before.tv_nsec) / 1000000);
+        printf("\b\b\b\b%4d", k);
+        fflush(stdout);
     }
-    // Send command to update the panels
-    for(int j = 0; j < devices; j++)
-    {
-        serialWrite(j, "d", 1);
-        serialRead(j);
-    }
-
-    G_wait_key();
 
     for(int j = 0; j < devices; j++)
     {
         serialWrite(j, "c", 1);
-        serialRead(j);
+        serialRead(j, 0);
     }
+
+    serialDeinit();
 
     return 0;
 }
