@@ -23,6 +23,7 @@ uint8_t g_SendBuffer[128];
 
 void setup()
 {
+  drawingLayer.enableColorCorrection(false);
   matrix.addLayer(&drawingLayer);
   matrix.begin();
   matrix.setBrightness(0x20);
@@ -30,9 +31,6 @@ void setup()
   drawingLayer.fillScreen({0x00, 0x00, 0x00});
   drawingLayer.swapBuffers();
 
-#ifdef LED_ENABLED
-  pinMode(LED_PIN, OUTPUT);
-#endif
   Serial.begin(1000000);
   g_inputString.reserve(INPUT_RESERVE);
 }
@@ -107,16 +105,10 @@ void processCommand()
       len = len + strlen(g_SendBuffer);
       break;
     case 't':
-#ifdef LED_ENABLED
-      sprintf(g_SendBuffer, "Blinking\n");
-      len = len + strlen(g_SendBuffer);
-      blink();
-#else
       {
       sprintf(g_SendBuffer, "ID: 0x%X%X\n", HW_OCOTP_CFG0, HW_OCOTP_CFG1);
       len = len + strlen(g_SendBuffer);
       }
-#endif
       break;
     case 'i':
       g_SendBuffer[0] = (0x000000FF & HW_OCOTP_CFG1) >> 0;
@@ -140,6 +132,16 @@ void processCommand()
       g_SendBuffer[2] = pixel.blue;
       g_SendBuffer[3] = '\n';
       len = len + 4;
+      break;
+    }
+    case 'z':
+    {
+      CommandFillScreen_t *packet = (CommandFillScreen_t *)g_RecieveBuffer;
+      rgb24 color(packet->red, packet->green, packet->blue);
+      drawingLayer.fillScreen(color);
+      drawingLayer.swapBuffers();
+      sprintf(g_SendBuffer, "RGB: %3d %3d %3d\n", packet->red, packet->green, packet->blue);
+      len = len + strlen(g_SendBuffer);
       break;
     }
     default:
@@ -199,7 +201,11 @@ void checkSerial()
 
 void updatePanel(CommandDrawPanel_t *const packet)
 {
+  // We figure out which of the panels in the row we are on and then multiply an offset to get to the
+  // x corner of a particular panel
   int x0 = ((packet->panelId - 1) % PANELS_HORIZONTAL) * PANEL_SIZE;
+  // We do something similar for the y corner except we divide to reflect that we at wrapping around
+  // to the panel underneath even though the panels are laid out linearly
   int y0 = ((packet->panelId - 1) / PANELS_HORIZONTAL) * PANEL_SIZE;
   rgb24 color;
 

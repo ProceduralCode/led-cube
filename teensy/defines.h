@@ -15,7 +15,5 @@
 #define kRefreshDepth 36
 #define kDmaBufferRows 4
 #define INPUT_RESERVE PANEL_AREA * 4
-#define LED_PIN 13
-//#define LED_ENABLED
 
 #endif
