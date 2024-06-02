@@ -114,6 +114,7 @@ double2 rotate(double2 point, double angle) {
 		point.x * sin(rad) + point.y * cos(rad),
 	};
 }
+
 void ifs() {
 	screen screen;
 	screen_init(&screen);
@@ -124,37 +125,38 @@ void ifs() {
 	while (True) {
 		screen_clear(&screen, (double3){0, 0, 0});
 		
+		// All these points are in terms of a unit square
 		double2 point = {0, 0};
 		RGB hsl;// = (double3){0.3, 0.4, 0.4};
 		for (int i = 0; i < 1000000; i++) {
 			double r = drand48();
+			//printf("%lf: %lf,%lf\n", r, point.x, point.y);
 
 			// Fern
-			if (r < 0.8) { // Creates smaller ferns to the upper right
-				point = scale(point, (double2){0.90, 0.90});
-				point = rotate(point, -2);
-				point = translate(point, (double2){0, 0.1});
-				//hsl = lerp_double3(hsl, (double3){0.3, 0.4, 0.9}, 0.02);
+			if (r < 0.8) { // Sets points to the upper right
+				point = scale(point, (double2){0.90, 0.90}); // These points should have the most movement
+				point = rotate(point, -2); // turn each point 2 degrees clockwise
+				point = translate(point, (double2){0, 0.1}); // Adds an absolute 10% to the point's position
+				 //hsl = lerp_double3(hsl, (double3){0.3, 0.4, 0.9}, 0.02);
 				hsv2rgb(&hsl, 80, 40, 50);
-			} else if (r < 0.9) { // Lefthand leaves
-				point = scale(point, (double2){0.25, 0.25});
-				point = rotate(point, 60);
-				point = translate(point, (double2){0, 0.1});
+			} else if (r < 0.9) { // Sets points to the left side
+				point = scale(point, (double2){0.25, 0.25}); // Constrain the movement compared to other attractors
+				point = rotate(point, 60); // Rotate left
+				point = translate(point, (double2){0, 0.1}); // Allow movement to be more influenced by the translate
 				//hsl = lerp_double3(hsl, (double3){0.3, 0.4, 0.1}, 0.3);
-				hsv2rgb(&hsl, 80, 30, 100);
-			} else if (r < 0.999) { // Righthand leaves
-				point = scale(point, (double2){-0.27, 0.27});
-				point = rotate(point, -60);
-				point = translate(point, (double2){0, 0.05});
+				hsv2rgb(&hsl, 120, 80, 100);
+			} else if (r < 0.999) { // Righthand leaves. We use a sign change in the scale to flip the leaf.
+				point = scale(point, (double2){-0.27, 0.27}); // Pull these points to the right side of the screen
+				point = rotate(point, -60); // Rotate right
+				point = translate(point, (double2){0, 0.05}); // Most of this placement will be affected by the scale
 				//hsl = lerp_double3(hsl, (double3){0.3, 0.4, 0.1}, 0.3);
-				hsv2rgb(&hsl, 80, 30, 100);
-			} else { // Stem
-				point = scale(point, (double2){0, 0.12});
+				hsv2rgb(&hsl, 120, 80, 100);
+			} else { // Stem. Therefore these points move towards a single line.
+				point = scale(point, (double2){0, 0.12}); // Don't make the stem too big or too small
 				//hsl = lerp_double3(hsl, (double3){0.1, 0.4, 0.3}, 0.9);
-				hsv2rgb(&hsl, 70, 90, 100);
+				hsv2rgb(&hsl, 30, 90, 100);
 			}
-			
-			if (i < 10) { continue; }
+
 			double2 ss_point = to_screen_space(&screen, point);
 			int sx = (int)ss_point.x;
 			int sy = (int)ss_point.y;
@@ -164,39 +166,41 @@ void ifs() {
 			}
 		}
 
-		// Covert double3 to RGB
-		CommandDrawPanel_t packet;
-		int section = PANELS/devices;
-		for(int j = 0; j < devices; j++)
+		// Covert double3 to RGB and send
+		if(devices > 0)
 		{
-			for(int i = 0; i < section; i++)
+			CommandDrawPanel_t packet;
+			int section = PANELS/devices;
+			for(int j = 0; j < devices; j++)
 			{
-				int x0 = (i % PANELS_HORIZONTAL) * PANEL_SIZE;
-				int y0 = ((i + j*section) / PANELS_HORIZONTAL) * PANEL_SIZE;
-				packet.panelId = i+1;
-				packet.bufferId = 0;
-				packet.flags = 1;
-				for(int sy = 0; sy < PANEL_SIZE; sy++)
+				for(int i = 0; i < section; i++)
 				{
-					for(int sx = 0; sx < PANEL_SIZE; sx++)
+					int x0 = (i % PANELS_HORIZONTAL) * PANEL_SIZE;
+					int y0 = ((i + j*section) / PANELS_HORIZONTAL) * PANEL_SIZE;
+					packet.panelId = i+1;
+					packet.bufferId = 0;
+					packet.flags = 1;
+					for(int sy = 0; sy < PANEL_SIZE; sy++)
 					{
-						int px = x0 + sx;
-						int py = y0 + sy;
-						packet.pixelMap[(sx + sy * PANEL_SIZE) * COLORS + 0] = screen.pixels[py][px].x * 255;
-						packet.pixelMap[(sx + sy * PANEL_SIZE) * COLORS + 1] = screen.pixels[py][px].y * 255;
-						packet.pixelMap[(sx + sy * PANEL_SIZE) * COLORS + 2] = screen.pixels[py][px].z * 255;
+						for(int sx = 0; sx < PANEL_SIZE; sx++)
+						{
+							int px = x0 + sx;
+							int py = y0 + sy;
+							packet.pixelMap[(sx + sy * PANEL_SIZE) * COLORS + 0] = screen.pixels[py][px].x * 255;
+							packet.pixelMap[(sx + sy * PANEL_SIZE) * COLORS + 1] = screen.pixels[py][px].y * 255;
+							packet.pixelMap[(sx + sy * PANEL_SIZE) * COLORS + 2] = screen.pixels[py][px].z * 255;
+						}
 					}
+					serialWrite(j, (char*)&packet, sizeof(packet));
+					if(packet.flags) serialRead(j, 0);
 				}
-				serialWrite(j, (char*)&packet, sizeof(packet));
-				if(packet.flags) serialRead(j, 0);
+			}
+			for(int j = 0; j < devices; j++)
+			{
+				serialWrite(j, "d", 1);
+				serialRead(j, 0);
 			}
 		}
-		for(int j = 0; j < devices; j++)
-		{
-			serialWrite(j, "d", 1);
-			serialRead(j, 0);
-		}
-		
 		screen_draw(&screen);
 		int key = G_wait_key();
 

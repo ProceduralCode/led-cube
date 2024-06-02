@@ -1,6 +1,7 @@
 #ifndef __TYPEDEFS_H
 #define __TYPEDEFS_H
 
+#include <stdint.h>
 #include "defines.h"
 
 typedef struct _RGB
@@ -25,5 +26,17 @@ typedef struct {
 	double2 screen_bounds_min;
 	double2 screen_bounds_max;
 } screen;
+
+typedef struct {
+	double3 hsl;
+	double2 pos;
+	double rot;
+	int pen_state;
+} turtle;
+
+typedef struct {
+	char var;
+	char repl[100];
+} rule;
 
 #endif

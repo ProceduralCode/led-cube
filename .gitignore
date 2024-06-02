@@ -4,3 +4,7 @@
 # excutable files
 main
 *.AppImage
+
+# Hide media files used for the report
+*.jpg
+*.mp4
