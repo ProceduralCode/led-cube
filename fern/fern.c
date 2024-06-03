@@ -179,7 +179,6 @@ void ifs() {
 					int y0 = ((i + j*section) / PANELS_HORIZONTAL) * PANEL_SIZE;
 					packet.panelId = i+1;
 					packet.bufferId = 0;
-					packet.flags = 1;
 					for(int sy = 0; sy < PANEL_SIZE; sy++)
 					{
 						for(int sx = 0; sx < PANEL_SIZE; sx++)
@@ -192,7 +191,7 @@ void ifs() {
 						}
 					}
 					serialWrite(j, (char*)&packet, sizeof(packet));
-					if(packet.flags) serialRead(j, 0);
+					serialRead(j, 0);
 				}
 			}
 			for(int j = 0; j < devices; j++)

@@ -58,11 +58,8 @@ void processCommand()
     {
       CommandDrawPanel_t *packet = (CommandDrawPanel_t *)g_RecieveBuffer;
       updatePanel(packet);
-      if(packet->flags)
-      {
-        sprintf(g_SendBuffer, "Updating Panel %d %d\n", packet->panelId, packet->bufferId);
-        len = len + strlen(g_SendBuffer);
-      }
+      sprintf(g_SendBuffer, "Updating Panel %d %d\n", packet->panelId, packet->bufferId);
+      len = len + strlen(g_SendBuffer);
       break;
     }
     case 'c':
