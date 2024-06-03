@@ -4,12 +4,17 @@
 
 #include "defines.h"
 
+typedef struct _RGB
+{
+	uint8_t red, green, blue;
+} RGB;
+
 typedef struct _CommandDrawPanel_t
 {
     uint8_t panelId;
     uint8_t bufferId;
     uint8_t reserved[2];
-    uint8_t pixelMap[PANEL_AREA * COLORS];
+    RGB pixelMap[PANEL_SIZE][PANEL_SIZE];
 } CommandDrawPanel_t;
 
 typedef struct _CommandGetPixel_t

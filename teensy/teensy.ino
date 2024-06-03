@@ -210,13 +210,13 @@ void updatePanel(CommandDrawPanel_t *const packet)
   {
     for(int x = 0; x < PANEL_SIZE; x++)
     {
-      color.red   = packet->pixelMap[COLORS*y * PANEL_SIZE + COLORS*x + 0];
-      color.green = packet->pixelMap[COLORS*y * PANEL_SIZE + COLORS*x + 1];
-      color.blue  = packet->pixelMap[COLORS*y * PANEL_SIZE + COLORS*x + 2];
+      color.red   = packet->pixelMap[y][x].red;
+      color.green = packet->pixelMap[y][x].green;
+      color.blue  = packet->pixelMap[y][x].blue;
       drawingLayer.drawPixel(x0 + x, y0 + y, color);
     }
   }
-  //Serial.printf("Updating %d,%d 0x%02x%02x%02x\n", x0, y0, color.red, color.green, color.blue);
+  //Serial.printf("Updating %3d,%3d 0x%02x%02x%02x\n", x0, y0, color.red, color.green, color.blue);
 }
 
 void blink()

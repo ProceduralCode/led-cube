@@ -8,9 +8,10 @@
 // This program has major issues with stack overflows
 // We set these defines in order to constrain the problem
 #define PAGESIZE 4096
-#define PAGES 8
+#define PAGES 32
+#define STRING_MAX PAGESIZE*PAGES
 #define STACKTOP PAGESIZE
-#define MAX_ITERATIONS 6U
+#define MAX_ITERATIONS 7U
 
 typedef struct _StackElement_t
 {
@@ -18,11 +19,11 @@ typedef struct _StackElement_t
     double rot;
 } StackElement_t;
 
-RGB g_screen[SCREEN_WIDTH][SCREEN_HEIGHT];
+RGB g_screen[SCREEN_HEIGHT][SCREEN_WIDTH];
 int g_index;
 StackElement_t g_stack[STACKTOP];
-char g_string[PAGESIZE*PAGES] = {'X', 'F'};
-char g_stringCopy[PAGESIZE*PAGES];
+char g_string[STRING_MAX] = {'X', 'F'};
+char g_stringCopy[STRING_MAX];
 uint32_t g_hsvDegree;
 
 void _screen_recalc(screen *s)
@@ -130,7 +131,7 @@ void screen_draw_line(screen *s, double2 pos1, double2 pos2, double3 color) {
         int x = screen_pos1.x + t*delta_x;
         int y = screen_pos1.y + t*delta_y;
         if ((x < 0) || (y < 0) || (x >= SCREEN_WIDTH) || (y >= SCREEN_HEIGHT)) break;
-        g_screen[x][y] = rgb;
+        g_screen[y][x] = rgb;
         G_point(x,y);
     }
     g_hsvDegree = g_hsvDegree + 1;
@@ -168,7 +169,7 @@ void t_reset(turtle *t)
 {
     t->hsl = (double3){0.3, 0.4, 0.4};
     t->pos = (double2){0, 0};
-    t->rot = M_PI;
+    t->rot = M_PI/4.0;
     t->pen_state = 0;
 }
 void t_move(turtle *t, screen *s, double dist) {
@@ -204,6 +205,7 @@ void stackPush(double x, double y, double theta)
         printf("ERROR: tried to push to full stack\n");
         return;
     }
+    //printf("\x1B[36mPushing %lf,%lf %lf\n\x1B[0m", x, y, theta);
     g_stack[g_index] = (StackElement_t){x, y, theta};
     g_index++;
 }
@@ -219,6 +221,7 @@ void stackPop(double *const x, double *const y, double *const theta)
     *x = g_stack[g_index].x;
     *y = g_stack[g_index].y;
     *theta = g_stack[g_index].rot;
+    //printf("\x1B[35mPopping %lf,%lf %lf\n\x1B[0m", *x, *y, *theta);
 }
 
 void printString()
@@ -250,7 +253,7 @@ int F(char *const str)
     return size;
 }
 
-void production(screen *screen, turtle *t)
+void stringBuilder()
 {
     int i = 0;
     int size = 0;
@@ -263,37 +266,68 @@ void production(screen *screen, turtle *t)
                 break;
             case 'F':
                 size += F(g_stringCopy+size);
-                t_move(t, screen, 0.02);
                 break;
             case '+':
                 g_stringCopy[size] = '+';
-                t_rot(t, 25);
                 size++;
                 break;
             case '-':
                 g_stringCopy[size] = '-';
-                t_rot(t, -25);
                 size++;
                 break;
             case '[':
                 g_stringCopy[size] = '[';
-                stackPush(t->pos.x, t->pos.y, t->rot);
                 size++;
                 break;
             case ']':
                 g_stringCopy[size] = ']';
-                stackPop(&t->pos.x, &t->pos.y, &t->rot);
                 size++;
                 break;
             default:
                 printf("%c is an invalid production\n");
         }
         i++; //i should not exceed the size of the array
+        if(size > STRING_MAX)
+        {
+            printf("Exceeded the string array by %d bytes\n", size - STRING_MAX);
+            exit(0);
+        }
     }
 
     g_stringCopy[size] = '\0'; // Ensure a null terminator
     strcpy(g_string, g_stringCopy); // Replace the old string
     memset(g_stringCopy, '\0', strlen(g_stringCopy)); // zero out the copy string for next time
+}
+
+void production(screen *screen, turtle *t)
+{
+    int i = 0;
+    while(g_string[i] != '\0')
+    {
+        switch(g_string[i])
+        {
+            case 'X':
+                break;
+            case 'F':
+                t_move(t, screen, 0.02);
+                break;
+            case '+':
+                t_rot(t, 25.0);
+                break;
+            case '-':
+                t_rot(t, -25.0);
+                break;
+            case '[':
+                stackPush(t->pos.x, t->pos.y, t->rot);
+                break;
+            case ']':
+                stackPop(&t->pos.x, &t->pos.y, &t->rot);
+                break;
+            default:
+                printf("%c is an invalid production\n");
+        }
+        i++; //i should not exceed the size of the array
+    }
 }
 
 int main(int argc, char *argv[])
@@ -302,7 +336,7 @@ int main(int argc, char *argv[])
     screen screen;
     turtle t;
     screen_init(&screen);
-    screen_set_view(&screen, (double2){0.0, 0.0}, 0.6);
+    screen_set_view(&screen, (double2){0.9, 0.7}, 0.6);
     double2 pa = {0, 0};
 
     int devices = serialInit();
@@ -315,50 +349,58 @@ int main(int argc, char *argv[])
 
         // Reset the string builder
         memset(g_string, '\0', strlen(g_string));
-        g_string[0] = 'X'; g_string[1] = 'F';
         memset(g_stringCopy, '\0', strlen(g_stringCopy));
         memset(g_stack, 0, sizeof(g_stack));
 
+        // Axiom
+        g_string[0] = 'X';
+
         // Set the starting position on the color wheel
         g_hsvDegree = 130;
+        memset(g_screen, 0, sizeof(g_screen));
 
         // Go through the productions
         for(int i = 0; i < iterations; i++)
         {
             printString();
-            production(&screen, &t);
+            stringBuilder();
         }
+        production(&screen, &t);
 
-        // Print to the LED Matracies
-        CommandDrawPanel_t packet;
-        int section = PANELS/devices;
-        for(int j = 0; j < devices; j++)
+        if(devices > 0)
         {
-            for(int i = 0; i < section; i++)
+            // Print to the LED Matracies
+            CommandDrawPanel_t packet;
+            int section = PANELS/devices;
+            for(int j = 0; j < devices; j++)
             {
-                int x0 = (i % PANELS_HORIZONTAL) * PANEL_SIZE;
-                int y0 = ((i + j*section) / PANELS_HORIZONTAL) * PANEL_SIZE;
-                packet.panelId = i+1;
-                packet.bufferId = 0;
-                for(int sy = 0; sy < PANEL_SIZE; sy++)
+                for(int i = 0; i < section; i++)
                 {
-                    for(int sx = 0; sx < PANEL_SIZE; sx++)
+                    int x0 = (i % PANELS_HORIZONTAL) * PANEL_SIZE;
+                    int y0 = ((i + j*section) / PANELS_HORIZONTAL) * PANEL_SIZE;
+                    packet.panelId = i+1;
+                    packet.bufferId = 0;
+                    for(int sy = 0; sy < PANEL_SIZE; sy++)
                     {
-                        int px = x0 + sx;
-                        int py = y0 + sy;
-                        packet.pixelMap[(sx + sy * PANEL_SIZE) * COLORS + 0] = screen.pixels[py][px].x * 255;
-                        packet.pixelMap[(sx + sy * PANEL_SIZE) * COLORS + 1] = screen.pixels[py][px].y * 255;
-                        packet.pixelMap[(sx + sy * PANEL_SIZE) * COLORS + 2] = screen.pixels[py][px].z * 255;
+                        for(int sx = 0; sx < PANEL_SIZE; sx++)
+                        {
+                            int px = x0 + sx;
+                            int py = y0 + sy;
+                            packet.pixelMap[sy][sx].red = g_screen[py][px].red;
+                            packet.pixelMap[sy][sx].green = g_screen[py][px].green;
+                            packet.pixelMap[sy][sx].blue = g_screen[py][px].blue;
+                            //if(g_screen[py][px].green != 0) printf("%3d,%3d --- %3d,%3d\n", sx, sy, px, py);
+                        }
                     }
+                    serialWrite(j, (char*)&packet, sizeof(packet));
+                    serialRead(j, 0);
                 }
-                serialWrite(j, (char*)&packet, sizeof(packet));
-                serialRead(j, 1);
             }
-        }
-        for(int j = 0; j < devices; j++)
-        {
-            serialWrite(j, "d", 1);
-            serialRead(j, 1);
+            for(int j = 0; j < devices; j++)
+            {
+                serialWrite(j, "d", 1);
+                serialRead(j, 0);
+            }
         }
 
         int key = G_wait_key();
@@ -379,7 +421,7 @@ int main(int argc, char *argv[])
         if (key == 'j') { pa_off = (double2){-0.02, 0}; }
         if (key == 'l') { pa_off = (double2){0.02, 0}; }
         if (key == '=') { iterations = iterations%MAX_ITERATIONS + 1; }
-        if (key == '-') { iterations = (iterations-1)%MAX_ITERATIONS; }
+        if (key == '-') { iterations = (iterations-1)%MAX_ITERATIONS; } // This is the best we can do without adding if statements
         pa = translate(pa, pa_off);
         printf("pa: (%f, %f)\n", pa.x, pa.y);
 
