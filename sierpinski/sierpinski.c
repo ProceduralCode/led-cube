@@ -8,10 +8,10 @@
 // This program has major issues with stack overflows
 // We set these defines in order to constrain the problem
 #define PAGESIZE 4096
-#define PAGES 32
+#define PAGES 1
 #define STRING_MAX PAGESIZE*PAGES
 #define STACKTOP PAGESIZE
-#define MAX_ITERATIONS 7U
+#define MAX_ITERATIONS 4U
 
 typedef struct _StackElement_t
 {
@@ -28,12 +28,6 @@ uint32_t g_hsvDegree;
 
 void _screen_recalc(screen *s)
 {
-    // s->viewscale_lens[0] = 1 / s->viewscale;
-    // s->viewscale_lens[1] = 1 / s->viewscale * SCREEN_HEIGHT / SCREEN_WIDTH;
-    // s->screen_bounds[0] = s->viewpoint[0] - s->viewscale_lens[0]/2;
-    // s->screen_bounds[1] = s->viewpoint[0] + s->viewscale_lens[0]/2;
-    // s->screen_bounds[2] = s->viewpoint[1] - s->viewscale_lens[1]/2;
-    // s->screen_bounds[3] = s->viewpoint[1] + s->viewscale_lens[1]/2;
     s->viewscale_lens = (double2){
         1 / s->viewscale,
         1 / s->viewscale * SCREEN_HEIGHT / SCREEN_WIDTH,
@@ -169,7 +163,7 @@ void t_reset(turtle *t)
 {
     t->hsl = (double3){0.3, 0.4, 0.4};
     t->pos = (double2){0, 0};
-    t->rot = M_PI/4.0;
+    t->rot = 0;
     t->pen_state = 0;
 }
 void t_move(turtle *t, screen *s, double dist) {
@@ -188,39 +182,6 @@ void t_rot(turtle *t, double ang) {
 void t_pen(turtle *t, int state) {
     t->pen_state = state;
 }
-rule *get_rule(char var, rule *rules)
-{
-    for (int i = 0; rules[i].var != '\0'; i++) {
-        if (rules[i].var == var) {
-            return &rules[i];
-        }
-    }
-    return NULL;
-}
-
-void stackPush(double x, double y, double theta)
-{
-    if(g_index == (STACKTOP-1))
-    {
-        printf("ERROR: tried to push to full stack\n");
-        return;
-    }
-    g_stack[g_index] = (StackElement_t){x, y, theta};
-    g_index++;
-}
-
-void stackPop(double *const x, double *const y, double *const theta)
-{
-    if(g_index == 0)
-    {
-        printf("ERROR: tried to pop from an empty stack\n");
-        return;
-    }
-    g_index--;
-    *x = g_stack[g_index].x;
-    *y = g_stack[g_index].y;
-    *theta = g_stack[g_index].rot;
-}
 
 void printString()
 {
@@ -235,17 +196,17 @@ void printString()
     printf("\n");
 }
 
-int X(char *const str)
+int F(char *const str)
 {
-    const char prod[] = "F+[[X]-X]-F[-FX]+X";
+    const char prod[] = "F-G+F+G-F";
     const int size = strlen(prod);
     strcpy(str, prod);
     return size;
 }
 
-int F(char *const str)
+int G(char *const str)
 {
-    const char prod[] = "FF";
+    const char prod[] = "GG";
     const int size = strlen(prod);
     strcpy(str, prod);
     return size;
@@ -259,11 +220,11 @@ void stringBuilder()
     {
         switch(g_string[i])
         {
-            case 'X':
-                size += X(g_stringCopy+size);
-                break;
             case 'F':
                 size += F(g_stringCopy+size);
+                break;
+            case 'G':
+                size += G(g_stringCopy+size);
                 break;
             case '+':
                 g_stringCopy[size] = '+';
@@ -282,7 +243,7 @@ void stringBuilder()
                 size++;
                 break;
             default:
-                printf("%c is an invalid production\n");
+                printf("%c has no rule\n");
         }
         i++; //i should not exceed the size of the array
         if(size > STRING_MAX)
@@ -304,16 +265,17 @@ void production(screen *screen, turtle *t)
     {
         switch(g_string[i])
         {
-            case 'X':
-                break;
             case 'F':
                 t_move(t, screen, 0.02);
                 break;
+            case 'G':
+                t_move(t, screen, 0.02);
+                break;
             case '+':
-                t_rot(t, 25.0);
+                t_rot(t, -120.0);
                 break;
             case '-':
-                t_rot(t, -25.0);
+                t_rot(t, 120.0);
                 break;
             case '[':
                 stackPush(t->pos.x, t->pos.y, t->rot);
@@ -330,11 +292,11 @@ void production(screen *screen, turtle *t)
 
 int main(int argc, char *argv[])
 {
-    int iterations = 1;
+    int iterations = 0;
     screen screen;
     turtle t;
     screen_init(&screen);
-    screen_set_view(&screen, (double2){0.9, 0.7}, 0.6);
+    screen_set_view(&screen, (double2){0.15, 0.135}, 2.0);
     double2 pa = {0, 0};
 
     int devices = serialInit();
@@ -351,7 +313,12 @@ int main(int argc, char *argv[])
         memset(g_stack, 0, sizeof(g_stack));
 
         // Axiom
-        g_string[0] = 'X';
+        g_string[0] = 'F';
+        g_string[1] = '-';
+        g_string[2] = 'G';
+        g_string[3] = '-';
+        g_string[4] = 'G';
+        printString();
 
         // Set the starting position on the color wheel
         g_hsvDegree = 130;
@@ -360,8 +327,8 @@ int main(int argc, char *argv[])
         // Go through the productions
         for(int i = 0; i < iterations; i++)
         {
-            printString();
             stringBuilder();
+            printString();
         }
         production(&screen, &t);
 
