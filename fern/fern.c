@@ -185,7 +185,7 @@ void ifs() {
 						{
 							int px = x0 + sx;
 							int py = y0 + sy;
-							packet.pixelMap[sy][sy].red = screen.pixels[py][px].x * 255;
+							packet.pixelMap[sy][sx].red = screen.pixels[py][px].x * 255;
 							packet.pixelMap[sy][sx].green = screen.pixels[py][px].y * 255;
 							packet.pixelMap[sy][sx].blue = screen.pixels[py][px].z * 255;
 						}
