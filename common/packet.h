@@ -12,6 +12,12 @@ typedef struct _CommandDrawPanel_t{
     RGB pixelMap[PANEL_SIZE][PANEL_SIZE];
 } CommandDrawPanel_t;
 
+typedef struct _CommandGetPixel_t
+{
+    uint8_t command;
+    uint8_t x, y;
+} CommandGetPixel_t;
+
 typedef struct _CommandFillScreen_t
 {
     uint8_t command;

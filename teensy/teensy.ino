@@ -14,10 +14,11 @@ void checkSerial();
 ******************************************************************************/
 SMARTMATRIX_ALLOCATE_BUFFERS(matrix, kMatrixWidth, kMatrixHeight, kRefreshDepth, kDmaBufferRows, SM_PANELTYPE_HUB75_64ROW_MOD32SCAN, SM_HUB75_OPTIONS_FM6126A_RESET_AT_START);
 SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(drawingLayer, kMatrixWidth, kMatrixHeight, COLOR_DEPTH, SM_BACKGROUND_OPTIONS_NONE);
-String g_inputString = "";      // a String to hold incoming data
 bool g_stringComplete = false;  // whether the string is complete
 char g_command = 0;
 int  g_commandLength = 0;
+volatile int g_index;
+uint8_t g_Buffer[INPUT_RESERVE];
 uint8_t g_RecieveBuffer[sizeof(CommandDrawPanel_t)];
 uint8_t g_SendBuffer[128];
 
@@ -32,7 +33,6 @@ void setup()
   drawingLayer.swapBuffers();
 
   Serial.begin(1000000);
-  g_inputString.reserve(INPUT_RESERVE);
 }
 
 void loop()
@@ -164,17 +164,17 @@ void serialEvent()
 
   while (Serial.available() > 0) {
     // get the new byte:
-    char inChar = (char)Serial.read();
+    int unfiltered = Serial.read();
 
-    // add it to the inputString:
-    g_inputString += inChar;
+    g_Buffer[g_index] = unfiltered;
+    g_index++;
 
     // if the incoming character is a newline, set a flag so the main loop can
     // do something about it:
-    if (inChar == '\n')
+    if (unfiltered == '\n')
     {
       g_stringComplete = true;
-      g_inputString[g_inputString.length()-1] = '\0';
+      g_Buffer[g_index-1] = '\0';
     }
   }
 }
@@ -186,12 +186,13 @@ void checkSerial()
 
   if(g_stringComplete)
   {
-    g_command = g_inputString[0];
-    g_commandLength = g_inputString.length() - 1;
-    memcpy(g_RecieveBuffer, g_inputString.c_str(), g_commandLength);
+    g_command = g_Buffer[0];
+    // Remove the serial terminator
+    g_commandLength = g_index - 1;
+    memcpy(g_RecieveBuffer, g_Buffer, g_commandLength);
 
     // cleanup for the next command
-    g_inputString = "";
+    g_index = 0;
     g_stringComplete = false;
   }
 }
@@ -214,9 +215,9 @@ void updatePanel(CommandDrawPanel_t *const packet)
       color.green = packet->pixelMap[y][x].green;
       color.blue  = packet->pixelMap[y][x].blue;
       drawingLayer.drawPixel(x0 + x, y0 + y, color);
+      //if(x==2 && y==61) Serial.printf("Updating %3d,%3d 0x%02x%02x%02x %d %d\n", x0+x, y0+y, color.red, color.green, color.blue, g_RecieveBuffer[11722], g_Buffer[11722]);
     }
   }
-  //Serial.printf("Updating %3d,%3d 0x%02x%02x%02x\n", x0, y0, color.red, color.green, color.blue);
 }
 
 void blink()

@@ -19,7 +19,7 @@ typedef struct _CommandDrawPanel_t
 
 typedef struct _CommandGetPixel_t
 {
-    uint8_t comamnd;
+    uint8_t command;
     uint8_t x, y;
 } CommandGetPixel_t;
 

@@ -8,6 +8,7 @@
 #include <string.h>
 #include <dirent.h>
 #include "serial.h"
+#include "packet.h"
 
 int serialFilter(const struct dirent *entry);
 int setInterfaceAttribs(const int fd, const int speed, const int parity);
@@ -240,4 +241,38 @@ uint64_t serialGetID(const int id)
     device_id = *((uint64_t*)recieve_buffer);
 
     return device_id;
+}
+
+void serialGetPixel(const int id, const int x, const int y)
+{
+    int count; // number of bytes recieved or sent. -1 on failure.
+    int fds;
+    int is_ready;
+    CommandGetPixel_t packet = {'p', x, y};
+
+    // Send the packet
+    do {
+        FD_SET(fd[id], &g_writefds);
+        fds = select(fd[id]+1, NULL, &g_writefds, NULL, NULL);
+        if(fds == -1) fprintf(stderr, "error %d selecting device%d: %s\n", errno, id, strerror(errno));
+        is_ready = FD_ISSET(fd[id], &g_writefds);
+    } while(!is_ready);
+    count = write(fd[id], (char*)&packet, sizeof(packet));
+    // Send the newline terminator
+    do {
+        FD_SET(fd[id], &g_writefds);
+        fds = select(fd[id]+1, NULL, &g_writefds, NULL, NULL);
+        if(fds == -1) fprintf(stderr, "error %d selecting device%d: %s\n", errno, id, strerror(errno));
+        is_ready = FD_ISSET(fd[id], &g_writefds);
+    } while(!is_ready);
+    count = write(fd[id], "\n", 1);
+    // Readback the response
+    do {
+        FD_SET(fd[id], &g_readfds);
+        fds = select(fd[id]+1, &g_readfds, NULL, NULL, NULL);
+        if(fds == -1) fprintf(stderr, "error %d selecting device%d: %s\n", errno, id, strerror(errno));
+        is_ready = FD_ISSET(fd[id], &g_readfds);
+    } while(!is_ready);
+    count = read(fd[id], recieve_buffer, sizeof(recieve_buffer));
+    printf("RGB: %3d,%3d,%3d\n", recieve_buffer[0] & 0xFF, recieve_buffer[1] & 0xFF, recieve_buffer[2] & 0xFF);
 }
